@@ -1,0 +1,95 @@
+name: Build
+
+on:
+  push:
+    branches: ["windows-backdrop"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release
+      - name: Stage portable exe
+        run: cp ./target/release/alacritty.exe ./Alacritty-windows-x64-portable.exe
+      - name: Install WiX
+        run: dotnet tool install --global wix --version 4.0.5
+      - name: Create msi installer
+        run: |
+          wix extension add WixToolset.UI.wixext/4.0.5 WixToolset.Util.wixext/4.0.5
+          wix build -arch "x64" -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext \
+            -out "./Alacritty-windows-x64-installer.msi" "alacritty/windows/wix/alacritty.wxs"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            Alacritty-windows-x64-portable.exe
+            Alacritty-windows-x64-installer.msi
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: brew install scdoc
+      - name: Install targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Build universal DMG
+        run: make dmg-universal
+      - name: Stage DMG
+        run: mv ./target/release/osx/Alacritty.dmg ./Alacritty-macos-universal.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: Alacritty-macos-universal.dmg
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake pkg-config libfreetype6-dev libfontconfig1-dev \
+            libxcb-xfixes0-dev libxkbcommon-dev python3 scdoc
+      - name: Build
+        run: cargo build --release
+      - name: Package tarball
+        run: |
+          mkdir -p pkg/alacritty
+          cp target/release/alacritty pkg/alacritty/
+          cp extra/linux/Alacritty.desktop extra/logo/alacritty-term.svg pkg/alacritty/
+          cp -r extra/completions extra/alacritty.info pkg/alacritty/
+          tar -C pkg -czf Alacritty-linux-x64.tar.gz alacritty
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: Alacritty-linux-x64.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
