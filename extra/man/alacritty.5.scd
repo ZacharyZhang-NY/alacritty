@@ -136,7 +136,7 @@ This section documents the *[window]* table of the configuration file.
 
 	Default: _1.0_
 
-*blur* = _true_ | _false_ # _(works on macOS/KDE Wayland)_
+*blur* = _true_ | _false_ # _(works on macOS/KDE Wayland/Windows 11)_
 
 	Request compositor to blur content behind transparent windows.
 
