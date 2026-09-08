@@ -384,7 +384,7 @@ impl Window {
 
     #[cfg(windows)]
     fn apply_windows_backdrop(window: &WinitWindow, blur: bool) {
-        let backdrop = if blur { BackdropType::MainWindow } else { BackdropType::None };
+        let backdrop = if blur { BackdropType::TransientWindow } else { BackdropType::None };
         window.set_system_backdrop(backdrop);
     }
 
